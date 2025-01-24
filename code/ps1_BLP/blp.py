@@ -45,7 +45,7 @@ blp_results1 = blp_problem.solve(
 blp_results2 = blp_problem.solve(
     np.random.rand(2, 2),
     optimization=pyblp.Optimization('bfgs'),
-    method='1s'
+    method='2s'
 )
 
 # Nonlinear Coefficient Estimates (Robust SEs in Parentheses):
