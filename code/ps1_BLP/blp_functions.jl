@@ -91,21 +91,20 @@ function gmm(δ, X, Z, β0, step = 1)
     end
 end
 
-
 ### Price elasticities
 
-function get_eps_t(p, β, X, Γ, v_vec =[])
+function get_eps_t(β, X, Γ, v_vec =[])
     # X: J*2 matrix, β: 2*1
     if v_vec == []
         s_vec = pr_mat(X*β, 0, 0, 0);
-        eps = [ j == k ? -β[1]*p[j]*(1 - s_vec[j]) : β[1]*p[k]*s_vec[k] 
+        eps = [ j == k ? -β[1]*X[j,1]*(1 - s_vec[j]) : β[1]*X[k,1]*s_vec[k] 
         for j in 1:J, k in 1:J];
     else
         s_mat = pr_mat(X*β, X, Γ, v_vec);
         s_hat = mean(s_mat, dims = 2);
-        a_vec = β[1] + Γ[1,1] .* v_vec[1, :]; 
-        eps_deep = [j == k ? -p[j]/s_hat[j]*a_vec[i]*(s_mat[j, i] - s_mat[j, i]^2) : 
-        p[j]/s_hat[j]*a_vec[i]*(s_mat[j, i] * s_mat[k, i]) for j in 1:J, k in 1:J, i in 1:L];
+        a_vec = β[1] .+ Γ[1,1] .* v_vec[1, :]; 
+        eps_deep = [j == k ? -X[j,1]/s_hat[j]*a_vec[i]*(s_mat[j, i] - s_mat[j, i]^2) : 
+        X[k,1]/s_hat[j]*a_vec[i]*(s_mat[j, i] * s_mat[k, i]) for j in 1:J, k in 1:J, i in 1:L];
         eps = dropdims(mean(eps_deep, dims = 3), dims = 3);
     end
     return eps

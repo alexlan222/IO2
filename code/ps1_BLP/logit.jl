@@ -26,6 +26,14 @@ df = leftjoin(df, DataFrame(market = 1:T,s0 = s0_vec), on = :market);
 y = log.(df.Shares) .- log.(df.s0);
 β, obj = gmm(y, X, Z, [1.0; 1.0], 1);
 
+eps_deep = fill(0., J, J, T);
+for t in 1:T
+    Xt = X[(J*(t-1)+1) : J*t, :];
+    eps_t = get_eps_t(β, Xt, 0);
+    eps_deep[:,:,t] = eps_t;
+end
+
+eps = dropdims(mean(eps_deep, dims = 3), dims = 3);
 
 
 

@@ -13,7 +13,7 @@ df = CSV.File(joinpath(data_dir, "ps1_ex4.csv"))|> DataFrame;
 # setup
 J = 6;
 T = 100;
-L = 40;
+L = 50;
 X = [df.p df.x];
 s = df.shares;
 Z = Matrix(df[:, [:z1, :z2, :z3, :z4, :z5, :z6, :x]]);
@@ -22,9 +22,9 @@ v_dist = MvNormal(mu, I(2));
 tol = 1e-14;
 max_iter = 1e5;
 
-gamma11 = collect(1:0.25:4);
-gamma21 = collect(-0.2:0.1:0.2);
-gamma22 = collect(-0.2:0.1:0.2);
+gamma11 = collect(4:1:10);
+gamma21 = collect(-0.4:0.2:0.4);
+gamma22 = collect(-0.4:0.2:0.4);
 
 ### Implementation
 
@@ -39,34 +39,19 @@ for γ11 in gamma11, γ21 in gamma21, γ22 in gamma22
     push!(results, result);
 end
 
-res_check = [val[1] for val in results];
-sol = results[argmin(res_check)];
 sorted_results = sort(results, by = x -> x[1])
+sol = sorted_results[1];
 
-# 7.9977658341808135, 6, -0.5, 0.0, [-0.2894857727082014, -3.094971039967556]
+# 8.14818175067673, 7, -0.2, 0.0, [-0.9048011815751427, -2.954760690482228]
+Γ = [sol[2] 0; sol[3] sol[4]];
+β = sol[5];
 
-## test
-# Γ = [-4.5 0; 0 0];
-# δ = get_delta(Γ, v_vec);
-# β, obj = gmm(δ, 1)
+eps_deep = fill(0., J, J, T);
+for t in 1:T
+    Xt = X[(J*(t-1)+1) : J*t, :];
+    vt = v_vec[:, (L*(t-1)+1) : L*t]
+    eps_t = get_eps_t(β, Xt, Γ, vt);
+    eps_deep[:,:,t] = eps_t;
+end
 
-# W = I(size(Z, 2));
-# step1 = optimize( β -> gmm_obj(β, δ, X, Z, W),
-#         [1.0; 1.0], LBFGS());
-# β1 = Optim.minimizer(step1);
-
-# # the optimal weighting matrix
-# res1 = δ .- X * β1;
-
-# # Z = Z ./ maximum(abs.(Z), dims=1);
-# # res1 = res1 ./ maximum(abs.(res1));
-# S = (Z' * res1) * (res1' * Z) ./ size(Z, 1);
-# # S = S ./ maximum(abs.(S))
-# W_new = inv(S);
-# W_new = W_new ./ maximum(abs.(W_new)) + 1e-12*I(J)
-
-# step2 = optimize( β -> gmm_obj(β, δ, X, Z, W_new),
-#         β1, LBFGS());
-# β2 = Optim.minimizer(step2);
-
-# obj = gmm_obj(β2, δ, X, Z, W_new)
+eps = dropdims(mean(eps_deep, dims = 3), dims = 3);
