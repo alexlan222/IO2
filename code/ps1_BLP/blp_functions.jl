@@ -80,7 +80,7 @@ function gmm(δ, X, Z, β0, step = 1)
     res1 = δ .- X * β1;
     S = (Z' * res1) * (res1' * Z) ./ size(Z, 1);
     W_new = inv(S); 
-    W_new = W_new ./ maximum(abs.(W_new)) + 1e-12*I(J);
+    W_new = W_new ./ maximum(abs.(W_new)) .+ 1e-12*I(size(Z, 2));
 
     # step 2
     step2 = optimize( β -> gmm_obj(β, δ, X, Z, W_new), β1, BFGS());
@@ -93,18 +93,18 @@ end
 
 ### Price elasticities
 
-function get_eps_t(β, X, Γ, v_vec =[])
+function get_eps_t(β, X, Γ, v_vec =[], δ=[])
     # X: J*2 matrix, β: 2*1
     if v_vec == []
-        s_vec = pr_mat(X*β, 0, 0, 0);
-        eps = [ j == k ? -β[1]*X[j,1]*(1 - s_vec[j]) : β[1]*X[k,1]*s_vec[k] 
-        for j in 1:J, k in 1:J];
+        s_vec = pr_mat(δ, 0, 0, 0);
+        eps = [ j == k ? β[1]*X[j,1]*(1 - s_vec[j]) : -β[1]*X[k,1]*s_vec[k] 
+        for k in 1:J, j in 1:J];
     else
-        s_mat = pr_mat(X*β, X, Γ, v_vec);
+        s_mat = pr_mat(δ, X, Γ, v_vec);
         s_hat = mean(s_mat, dims = 2);
         a_vec = β[1] .+ Γ[1,1] .* v_vec[1, :]; 
-        eps_deep = [j == k ? -X[j,1]/s_hat[j]*a_vec[i]*(s_mat[j, i] - s_mat[j, i]^2) : 
-        X[k,1]/s_hat[j]*a_vec[i]*(s_mat[j, i] * s_mat[k, i]) for j in 1:J, k in 1:J, i in 1:L];
+        eps_deep = [j == k ? X[j,1]/s_hat[j]*a_vec[i]*(s_mat[j, i] - s_mat[j, i]^2) : 
+        -X[k,1]/s_hat[j]*a_vec[i]*(s_mat[j, i] * s_mat[k, i]) for k in 1:J, j in 1:J, i in 1:L];
         eps = dropdims(mean(eps_deep, dims = 3), dims = 3);
     end
     return eps
