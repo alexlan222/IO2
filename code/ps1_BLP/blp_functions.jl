@@ -70,7 +70,10 @@ function gmm(δ, X, Z, β0, step = 1)
     # step 1
     X̂=(Z*inv(Z'*Z)*Z'*X);
     β1 = (inv(X̂'*X̂)*X̂'*δ);
-    obj1 = gmm_obj(β1, δ, X, Z, I(size(Z, 2)))
+    # W = I(size(Z, 2));
+    # step1 = optimize(β -> gmm_obj(β, δ, X, Z, I(size(Z, 2))), β0, BFGS());
+    # β1 = Optim.minimizer(step1);
+    obj1 = gmm_obj(β1, δ, X, Z, I(size(Z, 2)));
     if step == 1
         return β1, obj1
     end
@@ -88,20 +91,6 @@ function gmm(δ, X, Z, β0, step = 1)
     if step == 2
         return β2, obj2
     end
-end
-
-function tsls_gmm(δ, X, Z)
-    X̂=(Z*inv(Z'*Z)*Z'*X);
-    β1 = (inv(X̂'*X̂)*X̂'*δ);
-
-    res1 = δ .- X * β1;
-    S = (Z' * res1) * (res1' * Z) ./ size(Z, 1);
-    W_new = inv(S); 
-
-    step2 = optimize( β -> gmm_obj(β, δ, X, Z, W_new), β1, BFGS());
-    β2 = Optim.minimizer(step2);
-    obj2 = gmm_obj(β2, δ, X, Z, W_new)
-    return β2, obj2
 end
 
 ### Price elasticities

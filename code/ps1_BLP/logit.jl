@@ -4,6 +4,7 @@
 # ================================================================================
 
 include("blp_functions.jl")
+using NLsolve
 
 ps_dir = dirname(dirname(@__DIR__));
 data_dir = joinpath(joinpath(ps_dir, "data"), "ps1_BLP");
@@ -27,7 +28,7 @@ df = leftjoin(df, DataFrame(market = 1:T,s0 = s0_vec), on = :market);
 
 # 1. obtain an estimate for utility parameters
 y = log.(df.Shares) .- log.(df.s0);
-β, obj = gmm(y, X, Z, [1.0; 1.0], 2);
+β, obj = gmm(y, X, Z, [1.0; 1.0], 1);
 β_dis = round.(β, digits = 3);
 # -0.24 0.288
 
@@ -87,17 +88,8 @@ function share_pred(β, Xt, xit, p_old)
     return share
 end
 
-function p_cmt(β, Xt, xit, mct)
-    p_old = fill(1., J-1);
-    iter = 0;
-    sup_norm = 999;
-    while iter < max_iter && sup_norm > tol
-        iter += 1;
-        p_new = mct .- 1 ./(β[1]*(1 .- share_pred(β, Xt, xit, p_old)));
-        sup_norm = maximum(abs.(p_new .- p_old));
-        p_old = p_new;
-    end
-    return p_new
+function profit_foc!(p, mct, β, Xt, xit)
+    p .- mct .+ 1 ./(β[1]*(1 .- share_pred(β, Xt, xit, p)))
 end
 
 sim_deep = fill(0., J-1, 2, T)
@@ -105,7 +97,8 @@ for t in 1:T
     Xt = X1[(t-1)*(J-1)+1 : t*(J-1)];
     xit = xi[(t-1)*(J-1)+1 : t*(J-1)];
     mct = mc1[(t-1)*(J-1)+1 : t*(J-1)];
-    p = p_cmt(β, Xt, xit, mct);
+    # p = p_cmt(β, Xt, xit, mct);
+    p = nlsolve(p -> profit_foc!(p, mct, β, Xt, xit), fill(1., J-1)).zero
     share = share_pred(β, Xt, xit, p);
     sim_deep[:, 1, t] = p;
     sim_deep[:, 2, t] = share;
@@ -140,3 +133,17 @@ for t in 1:T
     Δu = logsumexp(y1[(t-1)*(J-1)+1 : t*(J-1)]) - logsumexp(y[(t-1)*J+1 : t*J]);
     append!(ΔU, Δu);
 end
+
+
+# function p_cmt(β, Xt, xit, mct)
+#     p_old = fill(1., J-1);
+#     iter = 0;
+#     sup_norm = 999;
+#     while iter < max_iter && sup_norm > tol
+#         iter += 1;
+#         p_new = mct .- 1 ./(β[1]*(1 .- share_pred(β, Xt, xit, p_old)));
+#         sup_norm = maximum(abs.(p_new .- p_old));
+#         p_old = p_new;
+#     end
+#     return p_new
+# end

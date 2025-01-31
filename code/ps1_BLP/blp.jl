@@ -13,7 +13,7 @@ df = CSV.File(joinpath(data_dir, "ps1_ex4.csv"))|> DataFrame;
 # setup
 J = 6;
 T = 100;
-L = 50;
+L = 200;
 X = [df.p df.x];
 s = df.shares;
 Z = Matrix(df[:, [:z1, :z2, :z3, :z4, :z5, :z6, :x]]);
@@ -22,9 +22,9 @@ v_dist = MvNormal(mu, I(2));
 tol = 1e-14;
 max_iter = 1e5;
 
-gamma11 = collect(-5:1:5);
-gamma21 = collect(-5:1:5);
-gamma22 = collect(-5:1:5);
+gamma11 = collect(0:0.2:7);
+gamma21 = collect(-0.01:0.01:0.01);
+gamma22 = collect(-0.03:0.01:-0.01);
 
 ### Implementation
 

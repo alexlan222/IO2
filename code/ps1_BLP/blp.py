@@ -20,14 +20,17 @@ product_data.rename(columns={f'z{i}': f'demand_instruments{i-1}' for i in range(
 
 # generate agent data
 agent_data = pd.DataFrame()
-for i in range(1,101):
-    agent_mat = np.random.multivariate_normal([0,0], np.identity(2), size = 50)
+num_markets = product_data["market_ids"].nunique()
+num_agents = 1000
+
+for i in range(1,num_markets + 1):
+    agent_mat = np.random.multivariate_normal([0,0], np.identity(2), size = num_agents)
     agent_mat = pd.DataFrame(agent_mat, columns = ["nodes0", "nodes1"])
     agent_mat["market_ids"] = i
-    agent_mat["weights"] = 0.02
+    agent_mat["weights"] = 1/num_agents
     agent_data = pd.concat([agent_data, agent_mat], ignore_index=True)
 
-pyblp.options.digits = 2
+pyblp.options.digits = 4
 pyblp.options.verbose = False
 
 X1_formulation = pyblp.Formulation('0 + prices + x')
@@ -43,26 +46,26 @@ blp_results1 = blp_problem.solve(
 )
 
 blp_results2 = blp_problem.solve(
-    np.random.rand(2, 2),
+    np.identity(2),
     optimization=pyblp.Optimization('bfgs'),
     method='2s'
 )
 
 # Nonlinear Coefficient Estimates (Robust SEs in Parentheses):
-# =========================================================================
-# Sigma:    prices        x       |  Sigma Squared:    prices        x     
-# ------  ----------  ----------  |  --------------  ----------  ----------
-# prices   -4.5E+00               |      prices       +2.0E+01    +1.1E-01 
-#         (+5.1E+00)              |                  (+4.6E+01)  (+1.6E+01)
-#                                 |                                        
-#   x      -2.4E-02    -4.4E-02   |        x          +1.1E-01    +2.5E-03 
-#         (+3.5E+00)  (+2.7E+00)  |                  (+1.6E+01)  (+3.4E-01)
-# =========================================================================
+# ==================================
+# Sigma:     prices          x      
+# ------  ------------  ------------
+# prices   +2.331E+00               
+#         (+1.910E+00)              
+                                  
+#   x      +0.000E+00    -1.054E-02 
+#                       (+1.685E+01)
+# ==================================
 
 # Beta Estimates (Robust SEs in Parentheses):
-# ======================
-#   prices        x     
-# ----------  ----------
-#  -1.5E+00    -1.7E-01 
-# (+2.0E+00)  (+4.6E-01)
-# ======================
+# ==========================
+#    prices          x      
+# ------------  ------------
+#  -8.271E-01    -8.579E-02 
+# (+9.518E-01)  (+5.413E-01)
+# ==========================
