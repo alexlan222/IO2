@@ -13,7 +13,7 @@ df = CSV.File(joinpath(data_dir, "ps1_ex4.csv"))|> DataFrame;
 # setup
 J = 6;
 T = 100;
-L = 200;
+L = 1000;
 X = [df.p df.x];
 s = df.shares;
 Z = Matrix(df[:, [:z1, :z2, :z3, :z4, :z5, :z6, :x]]);
@@ -22,11 +22,11 @@ v_dist = MvNormal(mu, I(2));
 tol = 1e-14;
 max_iter = 1e5;
 
-gamma11 = collect(0:0.2:7);
+gamma11 = collect(0:1:7);
 gamma21 = collect(-0.01:0.01:0.01);
 gamma22 = collect(-0.03:0.01:-0.01);
 
-### Implementation
+# u = (-α + γ11v1)p +(β + γ21v1 + γ22v2)x + ξ
 
 v_vec = hcat([rand(v_dist) for i in 1:T*L]...);
 
@@ -42,7 +42,8 @@ end
 sorted_results = sort(results, by = x -> x[1]);
 sol = sorted_results[1]
 
-# 8.14818175067673, 7, -0.2, 0.0, [-0.9048011815751427, -2.954760690482228]
+# 24.918809058952128, 7, -0.01, -0.01, Any[-3.1020556581862415, 0.7600865529273264]
+
 Γ = [sol[2] 0; sol[3] sol[4]];
 β = sol[5];
 δ = sol[6];
@@ -51,7 +52,8 @@ eps_deep = fill(0., J, J, T);
 for t in 1:T
     Xt = X[(J*(t-1)+1) : J*t, :];
     vt = v_vec[:, (L*(t-1)+1) : L*t]
-    eps_t = get_eps_t(β, Xt, Γ, vt, δ);
+    δt = δ[(J*(t-1)+1) : J*t]
+    eps_t = get_eps_t(β, Xt, Γ, vt, δt);
     eps_deep[:,:,t] = eps_t;
 end
 

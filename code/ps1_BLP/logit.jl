@@ -68,6 +68,13 @@ for t in 1:T
 end
 
 mc = dropdims(mean(mc_deep, dims = 2), dims = 2);
+mc_dis = round.(mc, digits = 3);
+# -1.893
+# -1.891
+# -1.56
+# -1.546
+# -1.55
+# -1.557
 
 # 4. price and market share simulation when product 1 exits
 
