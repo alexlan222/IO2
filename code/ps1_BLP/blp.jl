@@ -16,13 +16,13 @@ T = 100;
 L = 1000;
 X = [df.p df.x];
 s = df.shares;
-Z = Matrix(df[:, [:z1, :z2, :z3, :z4, :z5, :z6, :x]]);
+Z = hcat(Matrix(df[:, [:z1, :z2, :z3, :z4, :z5, :z6, :x]]), fill(1., T*J));
 mu = [0.0, 0.0];
 v_dist = MvNormal(mu, I(2));
 tol = 1e-14;
 max_iter = 1e5;
 
-gamma11 = collect(0:1:7);
+gamma11 = collect(2);
 gamma21 = collect(-0.01:0.01:0.01);
 gamma22 = collect(-0.03:0.01:-0.01);
 
@@ -34,7 +34,7 @@ results = []
 for γ11 in gamma11, γ21 in gamma21, γ22 in gamma22
     Γ = [γ11 0; γ21 γ22];
     δ = get_delta(Γ, v_vec);
-    β, obj = gmm(δ, X, Z, [-1.0; 1.0], 1);
+    β, obj = gmm(δ, X, Z, [-1.0; 1.0], 2);
     result = [obj, γ11, γ21, γ22, β, δ];
     push!(results, result);
 end
@@ -61,25 +61,28 @@ eps = dropdims(mean(eps_deep, dims = 3), dims = 3);
 
 
 #### testing
-# Γ = [7 0; -0.2 0.0];
-# δ = get_delta(Γ, v_vec);
-# W = I(size(Z, 2));
-# step1 = optimize( β -> gmm_obj(β, δ, X, Z, W), [-1.0; 1.0], BFGS());
-# β1 = Optim.minimizer(step1);
-# obj1 = gmm_obj(β1, δ, X, Z, W)
-# res1 = δ .- X * β1;
-# S = (Z' * res1) * (res1' * Z) ./ size(Z, 1);
-# W_new = inv(S); 
-# W_new = W_new ./ maximum(abs.(W_new)) .+ 1e-12*I(size(Z, 2));
-# step2 = optimize( β -> gmm_obj(β, δ, X, Z, W_new), β1, BFGS());
-# β2 = Optim.minimizer(step2);
-# obj2 = gmm_obj(β2, δ, X, Z, W_new)
+Γ = [3 0; -1 0.0];
+δ = get_delta(Γ, v_vec);
+W = I(size(Z, 2));
+X_cons = hcat(X, fill(1., size(X,1)));
+step1 = optimize( β -> gmm_obj(β, δ, X_cons, Z, W), [-1.0; 1.0; 1.0], BFGS());
 
-# X̂=(Z*inv(Z'*Z)*Z'*X);
-# β1 = (inv(X̂'*X̂)*X̂'*δ);
+β1 = Optim.minimizer(step1);
+obj1 = gmm_obj(β1, δ, X_cons, Z, W)
 
-# res1 = δ .- X * β1;
-# res1 = (res1 .- mean(res1)) ./ std(res1);
-# S = (Z' * res1) * (Z' * res1)' ./ size(Z, 1) .+ 1e-8 *I(size(Z, 2));
-# W_new = pinv(S); 
+res1 = δ .- X_cons * β1;
+S = (Z' * res1) * (Z' * res1)' ./ size(Z, 1);
+S = S .+  1e-12*I(size(S, 2)); 
+W_new = inv(S);
+step2 = optimize( β -> gmm_obj(β, δ, X_cons, Z, W_new), β1, BFGS());
+β2 = Optim.minimizer(step2);
+obj2 = gmm_obj(β2, δ, X_cons, Z, W_new);
+
+X̂=(Z*inv(Z'*Z)*Z'*X);
+β1 = (inv(X̂'*X̂)*X̂'*δ);
+
+res1 = δ .- X * β1;
+res1 = (res1 .- mean(res1)) ./ std(res1);
+S = (Z' * res1) * (Z' * res1)' ./ size(Z, 1) .+ 1e-8 *I(size(Z, 2));
+W_new = pinv(S); 
 

@@ -14,8 +14,8 @@ df = CSV.File(joinpath(data_dir, "ps1_ex2.csv"))|> DataFrame;
 T = 1000;
 J = 6;
 
-X = [df.Prices df.x];
-Z = [df.z df.x];
+X = [df.Prices df.x fill(1., T*J)];
+Z = [df.z df.x fill(1., T*J)];
 
 # generate the outside option shares
 s0_vec = [];
