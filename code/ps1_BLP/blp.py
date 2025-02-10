@@ -21,7 +21,7 @@ product_data.rename(columns={f'z{i}': f'demand_instruments{i-1}' for i in range(
 # generate agent data
 agent_data = pd.DataFrame()
 num_markets = product_data["market_ids"].nunique()
-num_agents = 1000
+num_agents = 200
 
 for i in range(1,num_markets + 1):
     agent_mat = np.random.multivariate_normal([0,0], np.identity(2), size = num_agents)
@@ -33,7 +33,7 @@ for i in range(1,num_markets + 1):
 pyblp.options.digits = 4
 pyblp.options.verbose = False
 
-X1_formulation = pyblp.Formulation('0 + prices + x')
+X1_formulation = pyblp.Formulation('1 + prices + x')
 X2_formulation = pyblp.Formulation('0 + prices + x')
 product_formulations = (X1_formulation, X2_formulation)
 

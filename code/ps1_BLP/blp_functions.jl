@@ -5,6 +5,7 @@
 
 using LinearAlgebra, DataFrames, Statistics, Distributions
 using Optim, Plots, CSV
+using Base.Threads 
 
 function pr_mat(δ, X, Γ, v_vec)
 
@@ -44,10 +45,10 @@ function delta_iter_t(X, s, Γ, v_vec)
     return δ, converge_check
 end
 
-function get_delta(Γ, v_vec)
+function get_delta(Γ, X, s, v_vec)
 
     δ = []
-    for t in 1:T
+    @threads for t in 1:T
         Xt = X[(6*(t-1)+1) : 6*t, :];
         st = s[(6*(t-1)+1) : 6*t, :];
         δt, error = delta_iter_t(Xt, st, Γ, 
@@ -65,9 +66,10 @@ function gmm_obj(β, δ, X, Z, W)
     return (ξ' * Z) * W * (ξ' * Z)'
 end
 
-function gmm(δ, X, Z, β0, step = 1)
+function gmm(δ, X, Z, step = 1)
 
     # step 1
+    X = hcat(X, ones(size(X, 1)))
     X̂=(Z*inv(Z'*Z)*Z'*X);
     β1 = (inv(X̂'*X̂)*X̂'*δ);
     # W = I(size(Z, 2));
@@ -95,7 +97,7 @@ end
 
 ### Price elasticities
 
-function get_eps_t(β, X, Γ, v_vec =[], δ=[])
+function get_eps_t(β, X, Γ, v_vec =[], δ)
     # X: J*2 matrix, β: 2*1
     if v_vec == []
         s_vec = pr_mat(δ, 0, 0, 0);

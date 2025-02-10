@@ -30,7 +30,7 @@ df = leftjoin(df, DataFrame(market = 1:T,s0 = s0_vec), on = :market);
 y = log.(df.Shares) .- log.(df.s0);
 β, obj = gmm(y, X, Z, [1.0; 1.0], 1);
 β_dis = round.(β, digits = 3);
-# -0.24 0.288
+#  -0.467 0.305
 
 # 2. own and cross-product elasticities
 eps_deep = fill(0., J, J, T);
@@ -45,12 +45,12 @@ eps = dropdims(mean(eps_deep, dims = 3), dims = 3);
 eps_dis = round.(eps, digits = 3);
 
 # 6×6 Matrix{Float64}:
-#  -0.641   0.165   0.165   0.165   0.165   0.165
-#   0.166  -0.641   0.166   0.166   0.166   0.166
-#   0.066   0.066  -0.661   0.066   0.066   0.066
-#   0.065   0.065   0.065  -0.663   0.065   0.065
-#   0.064   0.064   0.064   0.064  -0.662   0.064
-#   0.066   0.066   0.066   0.066   0.066  -0.662
+#  -1.25    0.321   0.321   0.321   0.321   0.321
+#   0.323  -1.251   0.323   0.323   0.323   0.323
+#   0.129   0.129  -1.289   0.129   0.129   0.129
+#   0.127   0.127   0.127  -1.294   0.127   0.127
+#   0.126   0.126   0.126   0.126  -1.291   0.126
+#   0.129   0.129   0.129   0.129   0.129  -1.291
 
 # 3. marginal cost
 mc_deep = fill(0., J, T);
@@ -68,13 +68,19 @@ for t in 1:T
 end
 
 mc = dropdims(mean(mc_deep, dims = 2), dims = 2);
-mc_dis = round.(mc, digits = 3);
-# -1.893
-# -1.891
-# -1.56
-# -1.546
-# -1.55
-# -1.557
+p = dropdims(mean(reshape(df.Prices, 6, :), dims = 2), dims = 2);
+s = dropdims(mean(reshape(df.Shares, 6, :), dims = 2), dims = 2);
+mc_dis = DataFrame(round.(hcat(mc, p, s), digits = 3), [:mc, :price, :share]); 
+
+#   │ mc       p        s       
+# ──┼───────────────────────────
+# 1 │   0.667    3.36     0.202
+# 2 │   0.672    3.368    0.203
+# 3 │   0.679    3.033    0.09
+# 4 │   0.689    3.04     0.089
+# 5 │   0.683    3.031    0.088
+# 6 │   0.683    3.038    0.091
+
 
 # 4. price and market share simulation when product 1 exits
 
@@ -112,12 +118,20 @@ for t in 1:T
 end
 
 sim = dropdims(mean(sim_deep, dims = 3), dims = 3);
+sim_dis = DataFrame(round.(sim, digits = 3), [:price, :share]); 
+#      price    share   
+# ──┼──────────────────
+# 1 │   3.34     0.195
+# 2 │   3.022    0.086
+# 3 │   3.029    0.085
+# 4 │   3.02     0.084
+# 5 │   3.027    0.086
 
 # 5. change in firms' profits and consumer welfare
 
-p = df.Prices;
+p = copy(df.Prices);
 deleteat!(p, 1:J:length(p));
-s = df.Shares;
+s = copy(df.Shares);
 deleteat!(s, 1:J:length(s));
 
 sim_df =  vcat([sim_deep[:, :, i] for i in 1:size(sim_deep, 3)]...);
@@ -125,6 +139,7 @@ p1 = sim_df[:, 1];
 s1 = sim_df[:, 2];
 Δπ = (p1 .- mc1).*s1 .- (p .- mc1).*s;
 Δπ_m = mean(reshape(Δπ, 5, 1000), dims = 2);
+round.(Δπ_m, digits = 4)
 
 # consumer welfare
 
@@ -141,6 +156,7 @@ for t in 1:T
     append!(ΔU, Δu);
 end
 
+round.(mean(ΔU), digits = 4)
 
 # function p_cmt(β, Xt, xit, mct)
 #     p_old = fill(1., J-1);
