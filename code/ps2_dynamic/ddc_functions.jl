@@ -11,9 +11,9 @@ repo_dir = dirname(dirname(@__DIR__));
 res_dir = joinpath(joinpath(repo_dir, "results"), "ps2");
 
 @with_kw struct ddc
-    θ1 = -0.2;
-    θ2 = -10;
-    X = 30;
+    θ1 = -1;
+    θ2 = -5;
+    X = 20;
     x = float(collect(0:(X-1)));
     f = [0.3, 0.6]
     N = length(x);
@@ -73,6 +73,7 @@ function get_w(u, T, β)
 end
 
 function vc(u, T, w, β)
+    N, A = size(u)
     vc = reduce(hcat,[u[:,i] .+ β .* T[:,:,i]*w for i in 1:A]);
     return vc
 end
@@ -84,35 +85,34 @@ function get_ccp(vc)
     return ccp  
 end
 
-function plot_ccp1(ddc, θ2, β, fig)
-    u = utility(ddc.x, ddc.θ1, θ2);
+function plot_ccp1(ddc, fig)
+    u = utility(ddc.x, [ddc.θ1, ddc.θ2]);
     T = get_T(ddc.x, ddc.f);
-    w = get_w(u, T, β);
-    ccp = get_ccp(vc(u, T, w, β));
+    w = get_w(u, T, ddc.β);
+    ccp = get_ccp(vc(u, T, w, ddc.β));
 
-    p = plot(ccp[:,1], title = string("CCP (θ2=",θ2,", β=",β,")"),
+    p = plot(ccp[:,1], title = string("CCP (θ1=", round(ddc.θ1, digits=2),
+            ", θ2=", round(ddc.θ2, digits=2), ", β=", round(ddc.β, digits=2),")"),
         xlabel = "state", ylabel = "maintenance", legend = false)
     savefig(p, joinpath(res_dir, fig * ".png"))
 end
 
-# Q1 graphs
-ddc1 = ddc()
-plot_ccp1(ddc1, -10, 0.95, "ccp_10_95")
-plot_ccp1(ddc1, -5, 0.95, "ccp_5_95")
-plot_ccp1(ddc1, -10, 0.5, "ccp_10_50")
-plot_ccp1(ddc1, -5, 0.5, "ccp_5_50")
-
 # model inversion
-function vhatb_from_ccp(ddc, phat, θ)
+function vhatb_from_ccp(ddc, phat, ε)
     # phat is N*2 matrix of CCP
+    # add small ε to prevent numerical issues
+    phat[phat[:, 2] .== 0, 2] .= ε
+    phat = phat ./ sum(phat, dims=2);
+
     vhat = log.(phat[:,1] ./ phat[:,ddc.A]);
     vhat = hcat(vhat, zeros(ddc.N));
     vmax = maximum(vhat);
     vhat = vhat .- vmax;
     log_sum_exp = vmax .+ log.(sum(exp.(vhat),dims = 2))
 
+    θ = [ddc.θ1, ddc.θ2]
     T = get_T(ddc.x, ddc.f);
-    u = utility(ddc.x, θ[1], θ[2]);
+    u = utility(ddc.x, θ);
     β = ddc.β; 
     A = ddc.A
     vhatb = reduce(hcat, [u[:,i] .- u[:,A] .+ 
@@ -122,27 +122,54 @@ function vhatb_from_ccp(ddc, phat, θ)
     return vhatb
 end
 
-function likelihood_two_step_ccp(θ, data, ddc, phat)
-    vhatb = vhatb_from_ccp(ddc, phat, θ);
-    id_lis = data.x
-    vhatb_dt = vhatb[id_lis, :]
-    LL = sum(data .* log.(vhatb_dt))
+function likelihood_two_step_ccp(data, ddc, phat, ε)
+    vhatb = vhatb_from_ccp(ddc, phat, ε);
+    vhatb_max = maximum(vhatb);
+    rexp_vhatb = exp.(vhatb .- vhatb_max) ./ sum(exp.(vhatb .- vhatb_max), dims = 2);
+    rexp_vhatb = rexp_vhatb[data.x_id, :];
+    rexp_vhatb = rexp_vhatb[CartesianIndex.(1:length(data.x_id), data.a_id)]
+    LL = sum(log.(rexp_vhatb))
     return LL
 end
 
+function objective(θ, data, phat, ε)
+    ddc_new = ddc(θ1 = θ[1], θ2 = θ[2])
+    return -likelihood_two_step_ccp(data, ddc_new, phat, ε)
+end
+
+function two_step_ccp(data, ddc, ε)
+    phat = combine(groupby(data, :x_id), 
+        :a_id => (a -> mean(a .== 1)) => :prob_a1,
+        :a_id => (a -> mean(a .== 2)) => :prob_a2)
+    missing_x_ids = setdiff(1:length(ddc.x), phat.x_id)
+    missing_df = DataFrame(x_id = missing_x_ids,
+            prob_a1 = zeros(length(missing_x_ids)),
+            prob_a2 = ones(length(missing_x_ids)))
+    phat = vcat(phat, missing_df)
+    sort!(phat, :x_id)
+
+    phat = Matrix(phat[:, [:prob_a1, :prob_a2]])
+    θ_init = [-0.2, -5.0];
+    result = optimize(θ -> objective(θ, data, phat, ε), θ_init,
+                            BFGS(), Optim.Options(show_trace = true));
+    θ_opt = Optim.minimizer(result);
+    println("Optimal θ1: ", θ_opt[1])
+    println("Optimal θ2: ", θ_opt[2])
+    println("Final negative log-likelihood: ", Optim.minimum(result))
+    return θ_opt
+end
+
 # draw simulations
-Tsim = 100;
 function forward_sim(ddc, Tsim)
     uf = rand(Uniform(0, 1), Tsim);
     us = rand(Gumbel(-MathConstants.γ, 1), (Tsim, 2));
-    θ = [-0.2, -10];
-    u = utility(ddc.x, θ);
+    u = utility(ddc.x, [ddc.θ1, ddc.θ2]);
     T = get_T(ddc.x, ddc.f);
     β = ddc.β;
     w = get_w(u, T, β);
     v_c = vc(u, T, w, β);
     x_init_id = 1;
-    x_id_sim = [];
+    x_id_sim = [x_init_id];
     a_id_sim = [];
     x_old_id = x_init_id
     for t in 1:Tsim
@@ -154,4 +181,8 @@ function forward_sim(ddc, Tsim)
         push!(a_id_sim, a)
         x_old_id = x_new_id;
     end
+    x_id_sim = x_id_sim[1:end-1];
+    return DataFrame(x_id = x_id_sim, a_id = a_id_sim)
 end
+
+
