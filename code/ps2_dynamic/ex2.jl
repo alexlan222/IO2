@@ -3,13 +3,14 @@
 # Alex Lan, Feb 17 2025
 # ================================================================================
 
-using Distributions, StatsPlots, Printf
-using DataFrames, CSV
+using Distributions, SparseArrays, StatsPlots, Printf
+using Optim, DataFrames, CSV
 
 repo_dir = dirname(dirname(@__DIR__));
 data_dir = joinpath(joinpath(repo_dir, "data"), "ps2_dynamic");
 res_dir = joinpath(joinpath(repo_dir, "results"), "ps2");
-
+β = 0.999;
+thres0 = 1e-10;
 
 df = CSV.File(joinpath(data_dir, "ps2_ex2.csv"))|> DataFrame;
 df.milage_l = circshift(df.milage, 1);
@@ -41,7 +42,6 @@ df.x_id = @. Int(div(df.milage - minx, delta) + 1)
 df.x_id = min.(df.x_id, K)
 df_mat = df[1:end-1, [:a_id, :x_id]] 
 
-
 T1 = zeros(K, K)
 for i in 1:K 
     if i == K 
@@ -57,24 +57,23 @@ for i in 1:K
     end
     end
 end
-
 @assert all(isapprox.(sum(T1, dims=2), 1.0, atol=1e-10)) "Invalid transition probabilities"
+T1[T1 .< thres0] .= 0;
+T1 = sparse(T1);
 
 T2 = [i == 1 ? cdf(n_fit, delta) : (cdf(n_fit, i*delta) - cdf(n_fit, (i-1)*delta)) for i in 1:K];
-T2 = repeat(T2', K, 1)
+T2 = repeat(T2', K, 1);
 @assert all(isapprox.(sum(T2, dims=2), 1.0, atol=1e-10)) "Invalid transition probabilities"
+T2[T2 .< thres0] .= 0;
+T2 = sparse(T2);
+T = cat(T1, T2, dims = 3)
 
-
-function utility(x, θ1, θ2, θ3)
-    u0 = -θ1.*x .- θ2.*(x ./ 100).^2 ;
-    u1 = fill(-θ3, length(x))
+function utility(x, θ)
+    u0 = -θ[1].*x .- θ[2].*(x ./ 100).^2 ;
+    u1 = fill(-θ[3], length(x))
     u = hcat(u0, u1)
     return u
 end
-
-u = utility(x, 1, 1, 10)
-T = cat(T1, T2, dims = 3)
-β = 0.999;
 
 function nfxp(u, T, β)
     sup_norm = 999;
@@ -84,16 +83,36 @@ function nfxp(u, T, β)
     iter = 0;
     while iter < max_iter && sup_norm > tol
         iter += 1;
-        ev_j = exp.(u .+ β .* ev_old);
-        ev_new = reduce(hcat, [T[:,:,i] * log.(sum(ev_j, dims = 2)) for i in 1:A]);
+        ev_j = u .+ β .*  ev_old
+        ev_new = reduce(hcat, [T[:,:,i] * log.(sum(exp.(ev_j), dims = 2)) .- 
+                T[:,:,A] * log.(sum(exp.(ev_j), dims = 2)) for i in 1:A]);
         sup_norm = maximum(abs.(ev_old .- ev_new));
         ev_old .= ev_new;
     end
-    return ev_new
+    return ev_old
 end
 
-ev = nfxp(u, T, β)
-ccp = exp.(u .+ β .* ev) ./ sum(exp.(u .+ β .* ev), dims = 2);
-ccp_t = ccp[df_mat.x_id, :];
-ccp_t = ccp_t[CartesianIndex.(1:length(df_mat.x_id),df_mat.a_id)];
-LL = sum(log.(ccp_t))
+function LL_obj(θ, df_mat)
+    u = utility(x, θ)
+    ev = nfxp(u, T, β)
+    ccp = exp.(u .+ β .* ev) ./ sum(exp.(u .+ β .* ev), dims = 2);
+    ccp_t = ccp[df_mat.x_id, :];
+    ccp_t = ccp_t[CartesianIndex.(1:length(df_mat.x_id),df_mat.a_id)];
+    LL = sum(log.(ccp_t))
+    return -LL
+end
+
+function nfxp_mle(df_mat, θ_init)
+    # must initialize with float vector!!
+    result = optimize(θ -> LL_obj(θ, df_mat), θ_init,
+                            BFGS(), Optim.Options(show_trace = true));
+    θ_opt = Optim.minimizer(result);
+    return θ_opt
+end
+
+θ = [1., 1., 10.]
+θ_opt = nfxp_mle(df_mat, θ)
+
+
+
+
